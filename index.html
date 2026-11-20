@@ -509,6 +509,11 @@ const COL = { L1: '#7a4a21', L2: '#111111', L3: '#8a8f98', N: '#4fa8e8', PE: '#2
 const CMDCOL = { ac: '#7b2cbf', dc: '#0b2f8f', l230: '#111111', n230: '#4fa8e8' };
 let CMDC = null;
 const mc = (c, mono) => (mono && c !== 'N' && c !== 'PE' ? c + '*' : c);
+let DN = false;
+const PROT = ['disj', 'dd', 'fus', 'gv'];
+function protBelow(n) { return (n.children || []).some(k => PROT.includes(k.type) || protBelow(k)); }
+const finalProt = n => PROT.includes(n.type) && !protBelow(n);
+function underFinal(n, target, acc) { if (n === target) return acc; const a2 = acc || finalProt(n); for (const k of n.children || []) { const r = underFinal(k, target, a2); if (r !== null) return r; } return null; }
 function cmdColors(C) { const t = String(C.tension || ''); if (/DC|CC|=|continu/i.test(t)) return { l: CMDCOL.dc, n: CMDCOL.dc, w: CMDCOL.dc }; if (/230|400/.test(t)) return { l: CMDCOL.l230, n: CMDCOL.n230, w: CMDCOL.l230 }; return { l: CMDCOL.ac, n: CMDCOL.ac, w: CMDCOL.ac }; }
 let B = [], BB = null;
 const f = v => Math.round(v * 10) / 10;
@@ -543,11 +548,11 @@ function qual(q, x, y) {
   if (q === 'km') B.push(`<path d="M${f(x - 3.8)} ${f(y - 2)} A3.8 3.8 0 0 0 ${f(x + 3.8)} ${f(y - 2)}" fill="none" stroke="#111" stroke-width="1.2"/>`);
 }
 function drawPoles(n, cs, xs, y0, hl) {
-  const t = TYPES[n.type], h = devH(n), mo = isMonoP(n.poles);
+  const t = TYPES[n.type], h = devH(n), mono = isMonoP(n.poles), mo = mono && DN, ml = mono && (DN || finalProt(n));
   const xmin = Math.min(...xs), xmax = Math.max(...xs);
   if (hl) B.push(`<rect class="selbg" x="${f(xmin - leftPad(n) + 4)}" y="${f(y0 - 4)}" width="${f(xmax - xmin + leftPad(n) + LBLW + 8)}" height="${f(h + 8)}" fill="#ffe58f" opacity=".55" rx="3"/>`);
   if (t.q === 'rt') {
-    cs.forEach((c, i) => { const x = xs[i]; W(mc(c, mo), x, y0, x, y0 + 14); W(mc(c, mo), x, y0 + 36, x, y0 + h);
+    cs.forEach((c, i) => { const x = xs[i]; W(mc(c, mo), x, y0, x, y0 + 14); W(mc(c, ml), x, y0 + 36, x, y0 + h);
       B.push(`<rect x="${f(x - 4.5)}" y="${f(y0 + 14)}" width="9" height="22" fill="#fff" stroke="#111" stroke-width="1.1"/>`);
       B.push(`<path d="M${f(x)} ${f(y0 + 14)} V${f(y0 + 21)} H${f(x + 2.6)} V${f(y0 + 29)} H${f(x)} V${f(y0 + 36)}" fill="none" stroke="${col(mc(c, mo))}" stroke-width="1.2"/>`); });
     L(xmin - 4.5, y0 + 25, xmin - 14, y0 + 25, '#111', 1, 'stroke-dasharray="3 2"');
@@ -562,8 +567,8 @@ function drawPoles(n, cs, xs, y0, hl) {
     cut.push(x);
     W(mc(c, mo), x, y0, x, yF);
     L(x, yP, x - 9, yF + 1.5, col(mc(c, mo)), 1.3);
-    if (t.q === 'fus') { W(mc(c, mo), x, yP, x, yP + 2); B.push(`<rect x="${f(x - 3.5)}" y="${f(yP + 2)}" width="7" height="10" fill="#fff" stroke="#111" stroke-width="1.1"/>`); L(x, yP + 2, x, yP + 12, '#111', 1); W(mc(c, mo), x, yP + 12, x, y0 + h); }
-    else W(mc(c, mo), x, yP, x, y0 + h);
+    if (t.q === 'fus') { W(mc(c, ml), x, yP, x, yP + 2); B.push(`<rect x="${f(x - 3.5)}" y="${f(yP + 2)}" width="7" height="10" fill="#fff" stroke="#111" stroke-width="1.1"/>`); L(x, yP + 2, x, yP + 12, '#111', 1); W(mc(c, ml), x, yP + 12, x, y0 + h); }
+    else W(mc(c, ml), x, yP, x, y0 + h);
     qual(k === 'cut' && (t.q === 'x' || t.q === 'gv') ? null : t.q, x, yF);
     if (t.q === 'gv') { B.push(`<path d="M${f(x)} ${f(y0 + 48)} h3 v4 h-3" fill="none" stroke="#111" stroke-width="1"/>`); }
   });
@@ -627,13 +632,13 @@ function measure(n, root, hz) {
   return (n._w = Math.max(own, sum));
 }
 function devDesc(n) { return [n.repere, n.designation || TYPES[n.type].l, calTxt(n)].filter(Boolean).join(' · '); }
-function place(n, x0, y0, root, F, up) { const r = place0(n, x0, y0, root, F, up); r.mono = isMonoP(n.poles); return r; }
+function place(n, x0, y0, root, F, up) { const sv = DN; const r = place0(n, x0, y0, root, F, up); DN = sv; r.mono = isMonoP(n.poles); return r; }
 function place0(n, x0, y0, root, F, up) {
   const cs = conds(n);
   n._folio = F.no;
   if (n.folio && n !== root) {
     const xs = cs.map((c, i) => x0 + 10 + i * S);
-    cs.forEach((c, i) => { W(mc(c, isMonoP(n.poles)), xs[i], y0, xs[i], y0 + 26); B.push(`<path d="M${f(xs[i] - 3)} ${f(y0 + 22)} L${f(xs[i])} ${f(y0 + 28)} L${f(xs[i] + 3)} ${f(y0 + 22)}" fill="none" stroke="${col(c)}" stroke-width="1.2"/>`); });
+    cs.forEach((c, i) => { W(mc(c, isMonoP(n.poles) && DN), xs[i], y0, xs[i], y0 + 26); B.push(`<path d="M${f(xs[i] - 3)} ${f(y0 + 22)} L${f(xs[i])} ${f(y0 + 28)} L${f(xs[i] + 3)} ${f(y0 + 22)}" fill="none" stroke="${col(c)}" stroke-width="1.2"/>`); });
     const no = F.newFolio(n, up);
     const lx = xs[xs.length - 1] + 10;
     T(lx, y0 + 12, '→ Folio ' + no, { b: 1, fs: 10 });
@@ -662,7 +667,7 @@ function place0(n, x0, y0, root, F, up) {
         const r = place(k, cx, yC, root, F, up);
         r.cs.forEach((cc, m) => {
           const j = cs.indexOf(cc); if (j < 0) { L(r.inXs[m], r.inYs[m] - 12, r.inXs[m], r.inYs[m], '#b42318', 1.4); return; }
-          const yy = y + j * BAR; W(mc(cc, r.mono), bx[j], yy, r.inXs[m], yy); dot(bx[j], yy, cc); W(mc(cc, r.mono), r.inXs[m], yy, r.inXs[m], r.inYs[m]);
+          const yy = y + j * BAR; W(mc(cc, r.mono && DN), bx[j], yy, r.inXs[m], yy); dot(bx[j], yy, cc); W(mc(cc, r.mono && DN), r.inXs[m], yy, r.inXs[m], r.inYs[m]);
         });
         cx += k._w + GAP;
       }
@@ -697,7 +702,8 @@ function place0(n, x0, y0, root, F, up) {
   hit(n.id, xs[0] - lp + 4, y0 - 4, xs[xs.length - 1] - xs[0] + lp + LBLW + 8, h + 8);
   const yOut = y0 + h;
   F.bottom = Math.max(F.bottom, yOut);
-  if (leaf) { F.leaves.push({ n, cs, xs, yOut, hz: F.hz }); return { cs, inXs: xs, inYs: cs.map(() => y0) }; }
+  if (leaf) { F.leaves.push({ n, cs, xs, yOut, hz: F.hz, dn: DN || finalProt(n) }); return { cs, inXs: xs, inYs: cs.map(() => y0) }; }
+  if (finalProt(n)) DN = true;
   const me = n;
   if (k.length === 1) {
     const c = k[0];
@@ -712,7 +718,7 @@ function place0(n, x0, y0, root, F, up) {
       const j = cs.indexOf(cc); const cx = r.inXs[m];
       if (j < 0) { L(cx, yC - 10, cx, r.inYs[m], '#b42318', 1.4); T(cx, yC - 12, '?', { a: 'middle', c: '#b42318', b: 1 }); return; }
       const px = xs[j];
-      const cm = mc(cc, r.mono || isMonoP(n.poles));
+      const cm = mc(cc, (r.mono || isMonoP(n.poles)) && DN);
       if (Math.abs(px - cx) < 0.5) W(cm, px, yOut, px, r.inYs[m]);
       else { const yj = yOut + 8 + j * 4; W(cm, px, yOut, px, yj); W(cm, px, yj, cx, yj); W(cm, cx, yj, cx, r.inYs[m]); }
     });
@@ -725,7 +731,7 @@ function place0(n, x0, y0, root, F, up) {
   cs.forEach((cc, i) => {
     let a = xs[i], b = xs[i];
     rs.forEach(r => r.cs.forEach((c2, m) => { if (c2 === cc) { a = Math.min(a, r.inXs[m]); b = Math.max(b, r.inXs[m]); } }));
-    const cm = mc(cc, isMonoP(n.poles));
+    const cm = mc(cc, isMonoP(n.poles) && DN);
     W(cm, xs[i], yOut, xs[i], bars[i]);
     if (b > a) { L(a, bars[i], b, bars[i], col(cm), 1.6); dot(xs[i], bars[i], cm); }
   });
@@ -736,7 +742,7 @@ function tap(cs, bars, r, F) {
   r.cs.forEach((cc, m) => {
     const j = cs.indexOf(cc), x = r.inXs[m];
     if (j < 0) { L(x, r.inYs[m] - 12, x, r.inYs[m], '#b42318', 1.4); T(x, r.inYs[m] - 14, '?', { a: 'middle', c: '#b42318', b: 1 }); return; }
-    W(mc(cc, r.mono), x, bars[j], x, r.inYs[m]); dot(x, bars[j], cc); if (r.bus) dot(x, r.inYs[m], cc);
+    W(mc(cc, r.mono && DN), x, bars[j], x, r.inYs[m]); dot(x, bars[j], cc); if (r.bus) dot(x, r.inYs[m], cc);
   });
 }
 function earth(x, y) { L(x, y, x, y + 10, '#111', 1.3); L(x - 8, y + 10, x + 8, y + 10, '#111', 1.4); L(x - 5, y + 14, x + 5, y + 14, '#111', 1.4); L(x - 2, y + 18, x + 2, y + 18, '#111', 1.4); }
@@ -744,9 +750,9 @@ function finishLeaves(F, CT, peX, peLbl, earthAt) {
   const yPE = Math.max(F.bottom, ...F.leaves.map(l => l.yOut)) + (F.compact ? 18 : 22) + (F.extra || 0), yT = yPE + (F.compact ? 26 : 32);
   let xmax = peX + 70, xmin = 1e9; F.yEnd = yT + 20;
   for (const lf of F.leaves) {
-    const { n, cs, xs, yOut } = lf, pe = n.pe !== false;
+    const { n, cs, xs, yOut } = lf, pe = n.pe !== false, md = isMonoP(n.poles) && lf.dn !== false;
     if (n.recepteur === 'cmd') {
-      cs.forEach((c, i) => { W(mc(c, isMonoP(n.poles)), xs[i], yOut, xs[i], yT + 6); B.push(`<path d="M${f(xs[i] - 3)} ${f(yT)} L${f(xs[i])} ${f(yT + 6)} L${f(xs[i] + 3)} ${f(yT)}" fill="none" stroke="${col(c)}" stroke-width="1.2"/>`); });
+      cs.forEach((c, i) => { W(mc(c, md), xs[i], yOut, xs[i], yT + 6); B.push(`<path d="M${f(xs[i] - 3)} ${f(yT)} L${f(xs[i])} ${f(yT + 6)} L${f(xs[i] + 3)} ${f(yT)}" fill="none" stroke="${col(c)}" stroke-width="1.2"/>`); });
       const ci = cmds(BT).findIndex(C => C.prot && C.prot.repere === n.repere);
       const lab = ci >= 0 ? (cmds(BT)[ci].titre || 'Commande') : 'Commande';
       n._bornes = ''; xmin = Math.min(xmin, xs[0]); xmax = Math.max(xmax, xs[xs.length - 1]);
@@ -757,7 +763,7 @@ function finishLeaves(F, CT, peX, peLbl, earthAt) {
       continue;
     }
     const a = CT.xp + 1;
-    cs.forEach((c, i) => { W(mc(c, isMonoP(n.poles)), xs[i], yOut, xs[i], yT - 3); term(xs[i], yT); CT.xp++; T(xs[i] + 9, yT + 5, CT.xp, { fs: 6, rot: -90, a: 'end' }); });
+    cs.forEach((c, i) => { W(mc(c, md), xs[i], yOut, xs[i], yT - 3); term(xs[i], yT); CT.xp++; T(xs[i] + 9, yT + 5, CT.xp, { fs: 6, rot: -90, a: 'end' }); });
     let xe = xs[xs.length - 1];
     if (pe) { xe += S; W('PE', xe, yPE, xe, yT - 3); dot(xe, yPE, 'PE'); term(xe, yT); CT.xp++; T(xe + 9, yT + 5, CT.xp, { fs: 6, rot: -90, a: 'end' }); }
     n._bornes = `XP ${a}…${CT.xp}`;
@@ -765,7 +771,7 @@ function finishLeaves(F, CT, peX, peLbl, earthAt) {
     let yD = yT + 34;
     if (n.recepteur === 'moteur') {
       const cx = (xs[0] + xs[xs.length - 1]) / 2, cy = yT + 64, r = 15;
-      cs.forEach((c, i) => { W(mc(c, isMonoP(n.poles)), xs[i], yT + 3, xs[i], yT + 26); W(mc(c, isMonoP(n.poles)), xs[i], yT + 26, cx + (i - (cs.length - 1) / 2) * 7, cy - r + 1.5); });
+      cs.forEach((c, i) => { W(mc(c, md), xs[i], yT + 3, xs[i], yT + 26); W(mc(c, md), xs[i], yT + 26, cx + (i - (cs.length - 1) / 2) * 7, cy - r + 1.5); });
       if (pe) { W('PE', xe, yT + 3, xe, cy); W('PE', xe, cy, cx + r, cy); }
       B.push(`<circle cx="${f(cx)}" cy="${f(cy)}" r="${r}" fill="#fff" stroke="#111" stroke-width="1.3"/>`);
       T(cx, cy + 1, 'M', { a: 'middle', b: 1, fs: 11 }); T(cx, cy + 10, (cs.length >= 3 ? '3' : '1') + '~', { a: 'middle', fs: 7.5 });
@@ -804,7 +810,7 @@ function frame(no, total, title, t, leg, inner) {
   s += c(cx, cy, 300, 39, 'Projet', P.projet || '', true) + c(cx + 300, cy, 170, 39, 'Tableau', `${t.nom}${t.designation ? ' · ' + t.designation : ''}`, false) + c(cx + 470, cy, 85, 39, 'Folio', `${no} / ${total}`, true) + c(cx + 555, cy, 85, 39, 'Indice', t.indice || '', true);
   s += c(cx, cy + 39, 300, 39, 'Titre', title, false) + c(cx + 300, cy + 39, 110, 39, 'Établi par', t.etabli || '', false) + c(cx + 410, cy + 39, 110, 39, 'Vérifié par', t.verifie || '', false) + c(cx + 520, cy + 39, 120, 39, 'Date', t.date || '', false);
   s += `<text x="34" y="${FH - 28}" font-size="10" fill="#667085">${esc(t.tension || '')} · Régime ${esc(t.regime || '')}${t.icc ? ' · Icc ' + esc(t.icc) : ''} · Symboles NF EN 60617 · Bornier puissance XP, commande XC</text>`;
-  const LG = leg || [['L1', COL.L1], ['L2', COL.L2], ['L3', COL.L3], ['N', COL.N], ['PE', 'PE'], ['Ph 230 V', COL.LM]];
+  const LG = leg || [['L1', COL.L1], ['L2', COL.L2], ['L3', COL.L3], ['N', COL.N], ['PE', 'PE'], ['Ph mono aval protection', COL.LM]];
   if (P.couleurs) { let lx = FW - 40 - LG.reduce((a, [l]) => a + 34 + l.length * 5.5, 0); LG.forEach(([l, cv], i) => { const x = lx; lx += 34 + l.length * 5.5; const c = cv === 'PE' ? 'PE' : '_'; s += c === 'PE' ? `<line x1="${x}" y1="60" x2="${x + 24}" y2="60" stroke="#2f9e44" stroke-width="2"/><line x1="${x}" y1="60" x2="${x + 24}" y2="60" stroke="#f2c200" stroke-width="2" stroke-dasharray="4 4"/>` : `<line x1="${x}" y1="60" x2="${x + 24}" y2="60" stroke="${cv}" stroke-width="2.5"/>`; s += `<text x="${x + 28}" y="64" font-size="11">${esc(l)}</text>`; }); }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FW} ${FH}" width="${f(FW * Z)}" height="${f(FH * Z)}" font-family="Arial, Helvetica, sans-serif"><rect width="${FW}" height="${FH}" fill="#fff"/>${inner}${s}</svg>`;
 }
@@ -828,7 +834,9 @@ function buildPower(t, CT, map, prev) {
     const pen = !q.from && /^TN-C/.test(t.regime || '') && conds(r).includes('N');
     const x0 = 110, y0 = 150 + Math.max(0, nAm - 1) * 24 + (pen ? 34 : 0);
     F.CT = CT; F.peX = q.from ? x0 - 30 : 54;
+    DN = !!q.from && underFinal(t.root, r, false);
     const res = place(r, x0, y0, r, F, null);
+    DN = false;
     let topY = 92, peX = 54, title;
     if (!q.from) {
       const lx = res.inXs[res.inXs.length - 1] + 14;
