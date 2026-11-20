@@ -16,7 +16,19 @@ Page en ligne : https://p-a-6-l-0.github.io/omnipole-pro/
 
 Lien direct vers un tableau : `#tgbt1`, `#tgbt2`, `#td1`, `#td2`.
 
-Les modifications faites dans la page restent dans le navigateur qui les a faites. Pour mettre à jour la version publiée, exporter le projet (menu ⋯ → Exporter le projet .json) et remplacer `data/projet.json`, ou remplacer `index.html` par le HTML exporté.
+### Enregistrement direct sur GitHub
+
+Sur la page GitHub Pages, l'outil lit toujours la dernière version de `data/projet.json` dans le dépôt. Pour que vos modifications y soient enregistrées automatiquement (un commit environ 5 s après la dernière modification) :
+
+1. Sur GitHub : **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+2. *Repository access* : **Only select repositories** → `omnipole-pro` uniquement.
+3. *Permissions → Repository permissions* : **Contents : Read and write** (rien d'autre).
+4. Choisir une date d'expiration, générer, copier le jeton.
+5. Dans l'outil : menu **⋯ → Enregistrement direct sur GitHub…**, coller le jeton.
+
+Le jeton reste dans le navigateur (jamais dans le dépôt). Le même menu permet de déconnecter le navigateur. Sans jeton, la page est en lecture seule : les modifications restent dans le navigateur.
+
+L'indicateur en haut de la page affiche l'état : « Enregistré sur GitHub ✓ », « Version plus récente sur GitHub : rechargez la page » (si quelqu'un a enregistré entre-temps), ou une erreur de jeton.
 
 ## Avertissement
 
