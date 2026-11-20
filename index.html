@@ -616,9 +616,10 @@ function place(n, x0, y0, root, F, up) {
     const saveLeaves = F.leaves, saveBottom = F.bottom, saveHz = F.hz;
     F.bandPE = F.bandPE || [];
     const isRoot = n === root;
-    bandsOf(n, root).forEach(band => {
+    bandsOf(n, root).forEach((band, bi) => {
       lastTop = y; const s0 = B.length, bandTop = y; let yPEb = null, bBottom;
-      const yC = y + (nc - 1) * BAR + 20;
+      const ex = (isRoot && F.stretch && F.stretch[bi]) || 0;
+      const yC = y + (nc - 1) * BAR + 20 + ex * 0.35;
       F.leaves = []; F.bottom = 0; F.hz = true;
       let cx = cx0;
       for (const k of band) {
@@ -629,7 +630,7 @@ function place(n, x0, y0, root, F, up) {
         });
         cx += k._w + GAP;
       }
-      const bf = { leaves: F.leaves, bottom: F.bottom, compact: 1 };
+      const bf = { leaves: F.leaves, bottom: F.bottom, compact: 1, extra: ex * 0.65 };
       if (bf.leaves.length) { const yPE = finishLeaves(bf, F.CT, F.peX, '', false); F.bandPE.push(yPE); yPEb = yPE; bBottom = bf.yEnd; y = bf.yEnd + 30; }
       else { bBottom = F.bottom; y = F.bottom + 30; }
       if (isRoot) F.bands.push({ s: s0, e: B.length, top: bandTop, bottom: bBottom, pe: yPEb, nodes: band });
@@ -702,7 +703,7 @@ function tap(cs, bars, r, F) {
 }
 function earth(x, y) { L(x, y, x, y + 10, '#111', 1.3); L(x - 8, y + 10, x + 8, y + 10, '#111', 1.4); L(x - 5, y + 14, x + 5, y + 14, '#111', 1.4); L(x - 2, y + 18, x + 2, y + 18, '#111', 1.4); }
 function finishLeaves(F, CT, peX, peLbl, earthAt) {
-  const yPE = Math.max(F.bottom, ...F.leaves.map(l => l.yOut)) + (F.compact ? 18 : 22), yT = yPE + (F.compact ? 26 : 32);
+  const yPE = Math.max(F.bottom, ...F.leaves.map(l => l.yOut)) + (F.compact ? 18 : 22) + (F.extra || 0), yT = yPE + (F.compact ? 26 : 32);
   let xmax = peX + 70, xmin = 1e9; F.yEnd = yT + 20;
   for (const lf of F.leaves) {
     const { n, cs, xs, yOut } = lf, pe = n.pe !== false;
@@ -763,13 +764,13 @@ function fitGroup(content, box, area, force) {
   return `<g transform="translate(${f(tx)} ${f(ty)}) scale(${Math.round(s * 1000) / 1000})">${content}</g>`;
 }
 const AREA = { x: 40, y: 78, w: FW - 80, h: FH - 78 - 110 }, MAXS = 1.5;
-function buildPower(t, CT, map) {
+function buildPower(t, CT, map, prev) {
   annotate(t.root);
-  const queue = [{ root: t.root, from: null }], out = [], counts = [];
+  const queue = [{ root: t.root, from: null }], out = [], counts = [], lay = [];
   for (let qi = 0; qi < queue.length; qi++) {
     const q = queue[qi], r = q.root;
     B = []; BB = { x1: 1e9, y1: 1e9, x2: -1e9, y2: -1e9 };
-    const F = { no: map ? map[qi] : qi + 1, leaves: [], bottom: 0, sub: [], bands: [], newFolio: (n, up) => { queue.push({ root: n, from: { no: F.no, up } }); const nn = map ? map[queue.length - 1] : queue.length; F.sub.push(nn); return nn; } };
+    const F = { no: map ? map[qi] : qi + 1, stretch: prev && prev.lay[qi] ? prev.lay[qi].stretch : null, leaves: [], bottom: 0, sub: [], bands: [], newFolio: (n, up) => { queue.push({ root: n, from: { no: F.no, up } }); const nn = map ? map[queue.length - 1] : queue.length; F.sub.push(nn); return nn; } };
     measure(r, r, false);
     const nAm = q.from ? 0 : cmds(t).filter(c => c.reprise === 'amont').length;
     const pen = !q.from && /^TN-C/.test(t.regime || '') && conds(r).includes('N');
@@ -825,9 +826,16 @@ function buildPower(t, CT, map) {
       const W0 = r._w + 60, hHead = segs[0].top - AREA.y + 10;
       const sc = bs => Math.min(MAXS, AREA.w / W0, AREA.h / (hHead + bs[bs.length - 1].bottom - bs[0].top + 24));
       let kp = 1; const nb = segs.length;
-      while (kp < nb) { const sz = Math.ceil(nb / kp); let ok = true; for (let i = 0; i < nb; i += sz) if (sc(segs.slice(i, i + sz)) < 1.05) ok = false; if (ok) break; kp++; }
-      const pages = [], sz = Math.ceil(nb / kp); for (let i = 0; i < nb; i += sz) pages.push(segs.slice(i, i + sz));
-      const sCommon = Math.min(...pages.map(sc));
+      while (kp < nb) { const sz = Math.ceil(nb / kp); let ok = true; for (let i = 0; i < nb; i += sz) if (sc(segs.slice(i, i + sz)) < Math.min(1.05, MAXS, AREA.w / W0) - 0.01) ok = false; if (ok) break; kp++; }
+      const L0 = prev && prev.lay[qi];
+      const sz = L0 ? L0.sz : Math.ceil(nb / kp);
+      const pages = []; for (let i = 0; i < nb; i += sz) pages.push(segs.slice(i, i + sz));
+      const sCommon = L0 ? L0.scale : Math.min(...pages.map(sc));
+      if (!L0) {
+        const stretch = [];
+        pages.forEach(pg => { const used = hHead + pg[pg.length - 1].bottom - pg[0].top + 24 + 40, free = AREA.h / sCommon - used; pg.forEach(b => stretch.push(Math.max(0, Math.min(450, free / pg.length)))); });
+        lay[qi] = { sz, scale: sCommon, stretch };
+      }
       const et = F.et, pX = x0 - 30;
       pages.forEach((pg, pi) => {
         B = []; BB = { x1: 1e9, y1: 1e9, x2: -1e9, y2: -1e9 };
@@ -868,7 +876,7 @@ function buildPower(t, CT, map) {
     out.push({ title, inner: fitGroup(B.join(''), BB, AREA) });
     counts[qi] = 1;
   }
-  out.counts = counts;
+  out.counts = counts; out.lay = lay;
   return out;
 }
 /* --- commande --- */
@@ -1041,7 +1049,7 @@ function buildNomen(t) {
 function buildAll(t) {
   const p1 = buildPower(t, { xp: 0 }, null);
   const map = []; let acc = 1; p1.counts.forEach((c, i) => { map[i] = acc; acc += c; });
-  const pw = buildPower(t, { xp: 0 }, map);
+  const pw = buildPower(t, { xp: 0 }, map, p1);
   const nm = buildNomen(t);
   const cfs = cmds(t).map(C => buildCmd(t, C));
   const cfStart = []; let k = pw.length + 1; cfs.forEach(pages => { cfStart.push(k); k += pages.length; });
