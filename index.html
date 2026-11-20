@@ -945,7 +945,13 @@ function buildPower(t, CT, map, prev) {
   return out;
 }
 /* --- commande --- */
+const REC = ['bob', 'mx', 'mn', 'tl', 'voy'];
 function drawEl(e, x, y) {
+  if (!CMDC || !P.couleurs || e._side !== 'N') return drawEl0(e, x, y);
+  const w = CMDC.w; CMDC.w = CMDC.n; try { drawEl0(e, x, y); } finally { CMDC.w = w; }
+}
+const cN = () => (CMDC && P.couleurs ? CMDC.n : '#111');
+function drawEl0(e, x, y) {
   const H = 60, lab = CEL[e.t] ? CEL[e.t].b : '';
   const bn = (e.b || lab || '').split('-');
   const top = () => L(x, y, x, y + 18), bot = () => L(x, y + 42, x, y + H);
@@ -966,9 +972,9 @@ function drawEl(e, x, y) {
     case 'c_nf': nf(); break;
     case 't_no': no(); act('t', x - 4.5); break;
     case 'bob': case 'mx': case 'mn': case 'tl':
-      L(x, y, x, y + 20); B.push(`<rect x="${f(x - 11)}" y="${f(y + 20)}" width="22" height="20" fill="#fff" stroke="#111" stroke-width="1.3"/>`); L(x, y + 40, x, y + H);
+      L(x, y, x, y + 20); B.push(`<rect x="${f(x - 11)}" y="${f(y + 20)}" width="22" height="20" fill="#fff" stroke="#111" stroke-width="1.3"/>`); L(x, y + 40, x, y + H, e._nb ? cN() : undefined);
       if (e.t !== 'bob') T(x, y + 33.5, e.t.toUpperCase(), { a: 'middle', fs: 7.5, b: 1 }); break;
-    case 'voy': L(x, y, x, y + 21); B.push(`<circle cx="${f(x)}" cy="${f(y + 30)}" r="9" fill="#fff" stroke="#111" stroke-width="1.3"/>`); L(x - 6.4, y + 23.6, x + 6.4, y + 36.4); L(x - 6.4, y + 36.4, x + 6.4, y + 23.6); L(x, y + 39, x, y + H); break;
+    case 'voy': L(x, y, x, y + 21); B.push(`<circle cx="${f(x)}" cy="${f(y + 30)}" r="9" fill="#fff" stroke="#111" stroke-width="1.3"/>`); L(x - 6.4, y + 23.6, x + 6.4, y + 36.4); L(x - 6.4, y + 36.4, x + 6.4, y + 23.6); L(x, y + 39, x, y + H, e._nb ? cN() : undefined); break;
     case 'borne': L(x, y, x, y + H); term(x, y + 30); break;
     case 'th_nf': nf(); L(x + 4.5, y + 31, x - 22, y + 31, '#111', 1, 'stroke-dasharray="3 2"'); B.push(`<rect x="${f(x - 32)}" y="${f(y + 24)}" width="10" height="14" fill="#fff" stroke="#111" stroke-width="1.1"/><path d="M${f(x - 27)} ${f(y + 24)} v4 h2.5 v6 h-2.5 v4" fill="none" stroke="#111" stroke-width="1"/>`); break;
     case 'disj': no(); L(x - 3.6, y + 14.4, x + 3.6, y + 21.6, '#111', 1.2); L(x - 3.6, y + 21.6, x + 3.6, y + 14.4, '#111', 1.2); break;
@@ -1079,24 +1085,27 @@ function buildCmd(t, C, base = 100) {
       T(rx, yTop - 14, String(num), { a: 'middle', b: 1, fs: 11 });
       dot(rx, yTop, 'L1');
       let y = yTop, cur = pL;
+      let lastRec = -1; g.forEach((grp, gi) => { if (grp.s.concat(grp.alt).some(e => REC.includes(e.t))) lastRec = gi; });
       g.forEach((grp, gi) => {
-        const lastG = gi === g.length - 1;
+        const lastG = gi === g.length - 1, aft = lastRec >= 0 && gi > lastRec, atR = gi === lastRec;
+        const lc = aft ? cN() : undefined;
+        const mk = (e, o) => Object.assign({}, e, o, aft ? { _side: 'N' } : (atR && REC.includes(e.t) ? { _nb: 1 } : {}));
         if (!grp.alt.length) {
-          const e = grp.s[0]; L(rx, y, rx, y + 8); drawEl(Object.assign({}, e, { _lw: 138 }), rx, y + 8);
+          const e = grp.s[0]; L(rx, y, rx, y + 8, lc); drawEl(mk(e, { _lw: 138 }), rx, y + 8);
           if (!lastG && !pass(e)) { cur = ++pn; PT(rx + 4, y + 73, cur); }
           y += 68; return;
         }
         const yt = y + 8, k = grp.s.length, yb = yt + (k - 1) * 68 + 60;
-        L(rx, y, rx, yt);
-        grp.s.forEach((e, j) => { drawEl(Object.assign({}, e, { _lw: 92 }), rx, yt + j * 68); if (j < k - 1) { L(rx, yt + j * 68 + 60, rx, yt + (j + 1) * 68); if (!pass(e)) PT(rx + 4, yt + j * 68 + 67, ++pn); } });
+        L(rx, y, rx, yt, lc);
+        grp.s.forEach((e, j) => { drawEl(mk(e, { _lw: 92 }), rx, yt + j * 68); if (j < k - 1) { L(rx, yt + j * 68 + 60, rx, yt + (j + 1) * 68, lc); if (!pass(e)) PT(rx + 4, yt + j * 68 + 67, ++pn); } });
         if (!lastG) { cur = ++pn; PT(rx + 4, yb + 11, cur); }
         const bx = grp.alt.map((e, i) => rx + (i + 1) * 120);
-        L(rx, yt, bx[bx.length - 1], yt); L(rx, yb, bx[bx.length - 1], yb); dot(rx, yt); dot(rx, yb);
+        L(rx, yt, bx[bx.length - 1], yt, lc); L(rx, yb, bx[bx.length - 1], yb, (aft || atR) ? cN() : undefined); dot(rx, yt, aft ? 'N' : undefined); dot(rx, yb, (aft || atR) ? 'N' : undefined);
         const ye = yt + (yb - yt - 60) / 2;
-        grp.alt.forEach((e, i) => { const xb = bx[i]; if (i < bx.length - 1) { dot(xb, yt); dot(xb, yb); } L(xb, yt, xb, ye); drawEl(e, xb, ye); L(xb, ye + 60, xb, yb); });
+        grp.alt.forEach((e, i) => { const xb = bx[i], rb = aft || (atR && REC.includes(e.t)) ? cN() : undefined; if (i < bx.length - 1) { dot(xb, yt, aft ? 'N' : undefined); dot(xb, yb, (aft || atR) ? 'N' : undefined); } L(xb, yt, xb, ye, lc); drawEl(mk(e), xb, ye); L(xb, ye + 60, xb, yb, rb); });
         y = yb;
       });
-      L(rx, y, rx, yBot); dot(rx, yBot, 'N');
+      L(rx, y, rx, yBot, lastRec >= 0 ? cN() : undefined); dot(rx, yBot, 'N');
       const words = (R.designation || '').split(' '); const lines = []; let cw = '';
       words.forEach(w => { if ((cw + ' ' + w).trim().length > 20) { lines.push(cw.trim()); cw = w; } else cw += ' ' + w; }); if (cw.trim()) lines.push(cw.trim());
       lines.forEach((s, i) => T(rx, yBot + 22 + i * 14, s, { a: 'middle', fs: 9 }));
